@@ -28,9 +28,9 @@
 #include <InfluxDbCloud.h>
 
 // WiFi AP SSID
-#define WIFI_SSID "Shen"
+#define WIFI_SSID "xxx"
 // WiFi password
-#define WIFI_PASSWORD "haveagreatday"
+#define WIFI_PASSWORD "xxx"
 // InfluxDB v2 server url, e.g. https://eu-central-1-1.aws.cloud2.influxdata.com (Use: InfluxDB UI -> Load Data -> Client Libraries)
 #define INFLUXDB_URL "http://192.168.1.100:8086"
 // InfluxDB v2 server or cloud API token (Use: InfluxDB UI -> Data -> API Tokens -> Generate API Token)
