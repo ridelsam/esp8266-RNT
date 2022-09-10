@@ -1,116 +1,62 @@
-/**
- * Secure Write Example code for InfluxDBClient library for Arduino
- * Enter WiFi and InfluxDB parameters below
- *
- * Demonstrates connection to any InfluxDB instance accesible via:
- *  - unsecured http://...
- *  - secure https://... (appropriate certificate is required)
- *  - InfluxDB 2 Cloud at https://cloud2.influxdata.com/ (certificate is preconfigured)
- * Measures signal level of the actually connected WiFi network
- * This example demonstrates time handling, secure connection and measurement writing into InfluxDB
- * Data can be immediately seen in a InfluxDB 2 Cloud UI - measurement wifi_status
- * 
- * Complete project details at our blog: https://RandomNerdTutorials.com/
- * 
- **/
+#include <Arduino.h>
+#include "HX711.h"
 
-#if defined(ESP32)
-  #include <WiFiMulti.h>
-  WiFiMulti wifiMulti;
-#define DEVICE "ESP32"
-  #elif defined(ESP8266)
-#include <ESP8266WiFiMulti.h>
-  ESP8266WiFiMulti wifiMulti;
-  #define DEVICE "ESP8266"
-#endif
+// HX711 circuit wiring
+const int LOADCELL_DOUT_PIN = 12;
+const int LOADCELL_SCK_PIN = 13;
 
-#include <InfluxDbClient.h>
-#include <InfluxDbCloud.h>
-
-// WiFi AP SSID
-#define WIFI_SSID "xxx"
-// WiFi password
-#define WIFI_PASSWORD "xxx"
-// InfluxDB v2 server url, e.g. https://eu-central-1-1.aws.cloud2.influxdata.com (Use: InfluxDB UI -> Load Data -> Client Libraries)
-#define INFLUXDB_URL "http://192.168.1.100:8086"
-// InfluxDB v2 server or cloud API token (Use: InfluxDB UI -> Data -> API Tokens -> Generate API Token)
-#define INFLUXDB_TOKEN "GAYQqnKb_GyyQ_tc5TSREEQiMK_rJq8wSP9NkXl3apU8ZulkSPqOLQon4_uA2WDtnh89oNbNSSoXC3fbyPhmeA=="
-// InfluxDB v2 organization id (Use: InfluxDB UI -> User -> About -> Common Ids )
-#define INFLUXDB_ORG "ride_pi"
-// InfluxDB v2 bucket name (Use: InfluxDB UI ->  Data -> Buckets)
-#define INFLUXDB_BUCKET "demo_with_pi"
-
-// Set timezone string according to https://www.gnu.org/software/libc/manual/html_node/TZ-Variable.html
-// Examples:
-//  Pacific Time: "PST8PDT"
-//  Eastern: "EST5EDT"
-//  Japanesse: "JST-9"
-//  Central Europe: "CET-1CEST,M3.5.0,M10.5.0/3"
-#define TZ_INFO "	PST8PDT,M3.2.0,M11.1.0"
-
-// InfluxDB client instance with preconfigured InfluxCloud certificate
-InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
-// InfluxDB client instance without preconfigured InfluxCloud certificate for insecure connection 
-//InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN);
-
-// Data point
-Point sensor("wifi_status");
+HX711 scale;
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("HX711 Demo");
+  Serial.println("Initializing the scale");
 
-  // Setup wifi
-  WiFi.mode(WIFI_STA);
-  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
 
-  Serial.print("Connecting to wifi");
-  while (wifiMulti.run() != WL_CONNECTED) {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println();
+  Serial.println("Before setting up the scale:");
+  Serial.print("read: \t\t");
+  Serial.println(scale.read());      // print a raw reading from the ADC
 
-  // Add tags
-  sensor.addTag("device", DEVICE);
-  sensor.addTag("SSID", WiFi.SSID());
+  Serial.print("read average: \t\t");
+  Serial.println(scale.read_average(20));   // print the average of 20 readings from the ADC
 
-  // Alternatively, set insecure connection to skip server certificate validation 
-  //client.setInsecure();
+  Serial.print("get value: \t\t");
+  Serial.println(scale.get_value(5));   // print the average of 5 readings from the ADC minus the tare weight (not set yet)
 
-  // Accurate time is necessary for certificate validation and writing in batches
-  // For the fastest time sync find NTP servers in your area: https://www.pool.ntp.org/zone/
-  // Syncing progress and the time will be printed to Serial.
-  timeSync(TZ_INFO, "pool.ntp.org", "time.nis.gov");
+  Serial.print("get units: \t\t");
+  Serial.println(scale.get_units(5), 1);  // print the average of 5 readings from the ADC minus tare weight (not set) divided
+            // by the SCALE parameter (not set yet)
+            
+  scale.set_scale(-478.507);
+  //scale.set_scale(-471.497);                      // this value is obtained by calibrating the scale with known weights; see the README for details
+  scale.tare();               // reset the scale to 0
 
-  // Check server connection
-  if (client.validateConnection()) {
-    Serial.print("Connected to InfluxDB: ");
-    Serial.println(client.getServerUrl());
-  } else {
-    Serial.print("InfluxDB connection failed: ");
-    Serial.println(client.getLastErrorMessage());
-  }
+  Serial.println("After setting up the scale:");
+
+  Serial.print("read: \t\t");
+  Serial.println(scale.read());                 // print a raw reading from the ADC
+
+  Serial.print("read average: \t\t");
+  Serial.println(scale.read_average(20));       // print the average of 20 readings from the ADC
+
+  Serial.print("get value: \t\t");
+  Serial.println(scale.get_value(5));   // print the average of 5 readings from the ADC minus the tare weight, set with tare()
+
+  Serial.print("get units: \t\t");
+  Serial.println(scale.get_units(5), 1);        // print the average of 5 readings from the ADC minus tare weight, divided
+            // by the SCALE parameter set with set_scale
+
+  Serial.println("Readings:");
 }
 
 void loop() {
-  // Store measured value into point
-  sensor.clearFields();
-  // Report RSSI of currently connected network
-  sensor.addField("rssi", WiFi.RSSI());
-  // Print what are we exactly writing
-  Serial.print("Writing: ");
-  Serial.println(client.pointToLineProtocol(sensor));
-  // If no Wifi signal, try to reconnect it
-  if (wifiMulti.run() != WL_CONNECTED) {
-    Serial.println("Wifi connection lost");
-  }
-  // Write point
-  if (!client.writePoint(sensor)) {
-    Serial.print("InfluxDB write failed: ");
-    Serial.println(client.getLastErrorMessage());
-  }
+  Serial.print("one reading:\t");
+  Serial.print(scale.get_units(), 1);
+  Serial.print("\t| average:\t");
+  Serial.println(scale.get_units(10), 5);
 
-  //Wait 10s
-  Serial.println("Wait 10s");
-  delay(10000);
+  scale.power_down();             // put the ADC in sleep mode
+  delay(5000);
+  scale.power_up();
 }
